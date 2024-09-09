@@ -1,0 +1,27 @@
+# permissions for end users to view argorolloutconfigkeepers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: argorolloutconfigkeeper-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: argo-rollout-config-keeper
+    app.kubernetes.io/part-of: argo-rollout-config-keeper
+    app.kubernetes.io/managed-by: kustomize
+  name: argorolloutconfigkeeper-viewer-role
+rules:
+- apiGroups:
+  - configkeeper.run.ai
+  resources:
+  - argorolloutconfigkeepers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - configkeeper.run.ai
+  resources:
+  - argorolloutconfigkeepers/status
+  verbs:
+  - get

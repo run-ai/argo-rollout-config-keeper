@@ -1,0 +1,16 @@
+apiVersion: configkeeper.run.ai/v1alpha1
+kind: ArgoRolloutConfigKeeper
+metadata:
+  labels:
+    app.kubernetes.io/name: argorolloutconfigkeeper
+    app.kubernetes.io/instance: argorolloutconfigkeeper-sample
+    app.kubernetes.io/part-of: argo-rollout-config-keeper
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: argo-rollout-config-keeper
+  name: argorolloutconfigkeeper-sample
+spec:
+  finalizerName: argorolloutconfigkeeper.app.test
+  appLabel: app.kubernetes.io/name
+  appVersionLabel: app.kubernetes.io/version
+  configLabelSelector:
+    "app.kubernetes.io/part-of": keeper-testing

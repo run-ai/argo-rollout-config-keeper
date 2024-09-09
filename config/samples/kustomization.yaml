@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- keeper_v1alpha1_argorolloutconfigkeeper.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples
