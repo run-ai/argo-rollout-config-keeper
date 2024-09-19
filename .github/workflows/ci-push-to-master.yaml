@@ -58,4 +58,4 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          make docker-build docker-push IMG="${{ secrets.DOCKERHUB_USERNAME }}/argo-rollout-config-keeper:master.$(git rev-parse --short HEAD)"
+          make docker-build docker-push IMG="${{ secrets.DOCKERHUB_USERNAME }}/argo-rollout-config-keeper-operator:master.$(git rev-parse --short HEAD)"

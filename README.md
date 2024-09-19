@@ -14,7 +14,7 @@ Its Also adding the following annotation to the outdated version of managed conf
 ### To Deploy on the cluster
 **Clone the repository:**
 ```sh
-git clone htt   ps://github.com/yossig-runai/ArgoRolloutConfigKeeper.git
+git clone https://github.com/yossig-runai/ArgoRolloutConfigKeeper.git
 cd ArgoRolloutConfigKeeper
 ```
 
