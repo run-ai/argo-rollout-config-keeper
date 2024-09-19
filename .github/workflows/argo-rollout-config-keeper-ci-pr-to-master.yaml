@@ -1,0 +1,51 @@
+name: "Argo-rollout-config-keeper CI: pull-request to master"
+
+on:
+  pull_request_target:
+    types: [labeled]
+    branches:
+      - master
+    paths-ignore:
+      - '.github/**'
+      - 'hack/**'
+      - 'README.md'
+      - 'Makefile'
+      - 'Dockerfile'
+      - 'PROJECT'
+      - '.gitignore'
+      - '.dockerignore'
+      - '.golangci.yml'
+
+jobs:
+  ci-pull-request-to-master:
+    if: contains(github.event.pull_request.labels.*.name, 'safe_to_test')
+    name: CI - pull-request to master
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.4'
+
+      - name: Install dependencies
+        run: |
+          go mod tidy
+          go mod vendor
+
+      - name: Make fmt
+        run: make fmt
+
+      - name: Make lint
+        run: make lint
+
+      - name: Create Kind cluster
+        run: make create-kinds-cluster
+
+      - name: Make test
+        env:
+          USE_EXISTING_CLUSTER: "true"
+        run: make test
