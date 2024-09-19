@@ -1,0 +1,52 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - configkeeper.run.ai
+  resources:
+  - argorolloutconfigkeepers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - configkeeper.run.ai
+  resources:
+  - argorolloutconfigkeepers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - configkeeper.run.ai
+  resources:
+  - argorolloutconfigkeepers/status
+  verbs:
+  - get
+  - patch
+  - update
