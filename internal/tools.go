@@ -22,3 +22,11 @@ func RemoveString(slice []string, s string) []string {
 	}
 	return result
 }
+
+func CreateMapFromStringList(list []string) map[string]bool {
+	result := make(map[string]bool)
+	for _, item := range list {
+		result[item] = true
+	}
+	return result
+}

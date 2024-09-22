@@ -3,7 +3,6 @@ module github.com/run-ai/argo-rollout-config-keeper
 go 1.22.4
 
 require (
-	github.com/blang/semver/v4 v4.0.0
 	github.com/go-logr/logr v1.3.0
 	github.com/hashicorp/go-version v1.7.0
 	github.com/onsi/ginkgo/v2 v2.13.0

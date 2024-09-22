@@ -16,8 +16,16 @@ resources:
     namespaced: true
   controller: true
   domain: run.ai
-  group: keeper
+  group: configkeeper
   kind: ArgoRolloutConfigKeeper
+  path: github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+  controller: true
+  domain: run.ai
+  group: configkeeper
+  kind: ArgoRolloutConfigKeeperClusterScope
   path: github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1
   version: v1alpha1
 version: "3"
