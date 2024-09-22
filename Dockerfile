@@ -16,7 +16,8 @@ COPY cmd/main.go cmd/main.go
 COPY api/ api/
 COPY internal/controller/*_controller.go internal/controller/
 COPY internal/metrics/ internal/metrics/
-COPY internal/tools.go internal/
+COPY internal/tools/tools.go internal/tools/
+COPY internal/common/ internal/common/
 
 # Build
 # the GOARCH has not a default value to allow the binary be built according to the host where the command
