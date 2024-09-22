@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -40,11 +41,10 @@ type ArgoRolloutConfigKeeperReconciler struct {
 
 const (
 	ArgoRolloutConfigStateInitializing                     = "initializing"
-	ArgoRolloutConfigStateReconcilingNamespace             = "reconciling namespace %s"
 	ArgoRolloutConfigStateReconcilingConfigmapsInNamespace = "reconciling configmaps in namespace %s"
 	ArgoRolloutConfigStateReconcilingSecretsInNamespace    = "reconciling secrets in namespace %s"
-	ArgoRolloutConfigStateReconcilingConfigmaps            = "reconciling configmaps"
-	ArgoRolloutConfigStateReconcilingSecrets               = "reconciling secrets"
+	ArgoRolloutConfigStateReconcilingConfigmaps            = "reconciling configmaps in all namespaces"
+	ArgoRolloutConfigStateReconcilingSecrets               = "reconciling secrets in all namespaces"
 	ArgoRolloutConfigStateFinished                         = "finished"
 )
 
@@ -79,7 +79,7 @@ func (r *ArgoRolloutConfigKeeperReconciler) Reconcile(ctx context.Context, req c
 	}
 	configKeeperCommon.FinalizerName = configKeeper.Spec.FinalizerName
 
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeper, ArgoRolloutConfigStateReconcilingConfigmaps); err != nil {
+	if err := configKeeperCommon.UpdateStatus(ctx, configKeeper, fmt.Sprintf(ArgoRolloutConfigStateReconcilingConfigmapsInNamespace, req.Namespace)); err != nil {
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 
@@ -92,7 +92,7 @@ func (r *ArgoRolloutConfigKeeperReconciler) Reconcile(ctx context.Context, req c
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, client.IgnoreNotFound(err)
 	}
 
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeper, ArgoRolloutConfigStateReconcilingSecrets); err != nil {
+	if err := configKeeperCommon.UpdateStatus(ctx, configKeeper, fmt.Sprintf(ArgoRolloutConfigStateReconcilingSecretsInNamespace, req.Namespace)); err != nil {
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
 	}
 

@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/run-ai/argo-rollout-config-keeper/internal/tools"
+
 	"github.com/go-logr/logr"
 	goversion "github.com/hashicorp/go-version"
 	keeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
-	"github.com/run-ai/argo-rollout-config-keeper/internal"
 	"github.com/run-ai/argo-rollout-config-keeper/internal/metrics"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -49,7 +50,7 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileConfigMaps(ctx context.Context,
 				}
 				if c.Finalizers != nil {
 					// check if the finalizer is in the finalizers list
-					finalizerFullName, havingManagedFinalizer := internal.ContainsString(c.GetFinalizers(), r.FinalizerName)
+					finalizerFullName, havingManagedFinalizer := tools.ContainsString(c.GetFinalizers(), r.FinalizerName)
 
 					if havingManagedFinalizer {
 						metrics.ManagedConfigMapCount.Inc()
@@ -103,7 +104,7 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileSecrets(ctx context.Context, na
 				}
 
 				if s.Finalizers != nil {
-					finalizerFullName, havingManagedFinalizer := internal.ContainsString(s.GetFinalizers(), r.FinalizerName)
+					finalizerFullName, havingManagedFinalizer := tools.ContainsString(s.GetFinalizers(), r.FinalizerName)
 
 					if havingManagedFinalizer {
 						metrics.ManagedSecretCount.Inc()
@@ -149,7 +150,7 @@ func (r *ArgoRolloutConfigKeeperCommon) finalizerOperation(ctx context.Context, 
 		}
 		if !inUse {
 			r.Logger.Info(fmt.Sprintf("removing finalizer from configmap, name: %s, reason: finalizer not in use", t.Name))
-			t.ObjectMeta.Finalizers = internal.RemoveString(t.ObjectMeta.Finalizers, finalizer)
+			t.ObjectMeta.Finalizers = tools.RemoveString(t.ObjectMeta.Finalizers, finalizer)
 			err = r.Update(ctx, t)
 			if err != nil {
 				r.Logger.Error(err, "unable to remove finalizer from configmap", "name", t.Name)
@@ -165,7 +166,7 @@ func (r *ArgoRolloutConfigKeeperCommon) finalizerOperation(ctx context.Context, 
 		}
 		if !inUse {
 			r.Logger.Info(fmt.Sprintf("removing finalizer from secret, name: %s, reason: finalizer not in use", t.Name))
-			t.ObjectMeta.Finalizers = internal.RemoveString(t.ObjectMeta.Finalizers, finalizer)
+			t.ObjectMeta.Finalizers = tools.RemoveString(t.ObjectMeta.Finalizers, finalizer)
 			err = r.Update(ctx, t)
 			if err != nil {
 				r.Logger.Error(err, "unable to remove finalizer from secret", "name", t.Name)

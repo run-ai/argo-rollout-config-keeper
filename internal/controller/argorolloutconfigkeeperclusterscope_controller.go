@@ -21,15 +21,15 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/run-ai/argo-rollout-config-keeper/internal"
+	configkeeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
 	"github.com/run-ai/argo-rollout-config-keeper/internal/common"
 	"github.com/run-ai/argo-rollout-config-keeper/internal/metrics"
+	"github.com/run-ai/argo-rollout-config-keeper/internal/tools"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	configkeeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 // ArgoRolloutConfigKeeperClusterScopeReconciler reconciles a ArgoRolloutConfigKeeperClusterScope object
@@ -81,7 +81,7 @@ func (r *ArgoRolloutConfigKeeperClusterScopeReconciler) Reconcile(ctx context.Co
 		labelSelector = configKeeperClusterScope.Spec.ConfigLabelSelector
 	}
 
-	ignoredNamespaces := internal.CreateMapFromStringList(configKeeperClusterScope.Spec.IgnoredNamespaces)
+	ignoredNamespaces := tools.CreateMapFromStringList(configKeeperClusterScope.Spec.IgnoredNamespaces)
 
 	if err := configKeeperCommon.ReconcileConfigMaps(ctx, "", labelSelector, ignoredNamespaces); err != nil {
 		return ctrl.Result{RequeueAfter: 1 * time.Minute}, client.IgnoreNotFound(err)
@@ -105,5 +105,6 @@ func (r *ArgoRolloutConfigKeeperClusterScopeReconciler) Reconcile(ctx context.Co
 func (r *ArgoRolloutConfigKeeperClusterScopeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&configkeeperv1alpha1.ArgoRolloutConfigKeeperClusterScope{}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
