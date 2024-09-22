@@ -108,3 +108,5 @@ func (r *ArgoRolloutConfigKeeperClusterScopeReconciler) SetupWithManager(mgr ctr
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
 }
+
+//
