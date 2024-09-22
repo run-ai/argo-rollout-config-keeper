@@ -32,7 +32,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	keeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
+	configkeeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
 	"github.com/run-ai/argo-rollout-config-keeper/internal/controller"
 	//+kubebuilder:scaffold:imports
 )
@@ -45,7 +45,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(keeperv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(configkeeperv1alpha1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
@@ -124,6 +124,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ArgoRolloutConfigKeeper")
+		os.Exit(1)
+	}
+	if err = (&controller.ArgoRolloutConfigKeeperClusterScopeReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ArgoRolloutConfigKeeperClusterScope")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

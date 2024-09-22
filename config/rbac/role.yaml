@@ -27,6 +27,32 @@ rules:
 - apiGroups:
   - configkeeper.run.ai
   resources:
+  - argorolloutconfigkeeperclusterscopes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - configkeeper.run.ai
+  resources:
+  - argorolloutconfigkeeperclusterscopes/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - configkeeper.run.ai
+  resources:
+  - argorolloutconfigkeeperclusterscopes/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - configkeeper.run.ai
+  resources:
   - argorolloutconfigkeepers
   verbs:
   - create

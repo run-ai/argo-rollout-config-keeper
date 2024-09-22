@@ -1,0 +1,18 @@
+apiVersion: configkeeper.run.ai/v1alpha1
+kind: ArgoRolloutConfigKeeperClusterScope
+metadata:
+  labels:
+    app.kubernetes.io/name: argorolloutconfigkeeperclusterscope
+    app.kubernetes.io/instance: argorolloutconfigkeeperclusterscope-sample
+    app.kubernetes.io/part-of: argo-rollout-config-keeper
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: argo-rollout-config-keeper
+  name: argorolloutconfigkeeperclusterscope-sample
+spec:
+  finalizerName: argorolloutconfigkeeper.app.test
+  appLabel: app.kubernetes.io/name
+  appVersionLabel: app.kubernetes.io/version
+  configLabelSelector:
+    "app.kubernetes.io/part-of": keeper-testing
+  ignoredNamespaces:
+    - kube-system

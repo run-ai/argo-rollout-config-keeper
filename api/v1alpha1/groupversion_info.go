@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package v1alpha1 contains API Schema definitions for the keeper v1alpha1 API group
+// Package v1alpha1 contains API Schema definitions for the configkeeper v1alpha1 API group
 // +kubebuilder:object:generate=true
 // +groupName=configkeeper.run.ai
 package v1alpha1

@@ -35,6 +35,8 @@ var (
 	ctx                   = context.Background()
 	name                  = "argo-rollout-config-keeper"
 	namespace             = "default"
+	configMapNamespace    = "test-configmap"
+	secretNamespace       = "test-secret"
 	chartName             = "testing-chart"
 	appVersion            = "1.11.0-staging1"
 	appPreviewVersion     = "1.11.0-staging2"
@@ -49,14 +51,14 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 		Name:      name,
 		Namespace: namespace,
 	}
-	argorolloutconfigkeeper := &keeperv1alpha1.ArgoRolloutConfigKeeper{}
+	argoRolloutConfigKeeper := &keeperv1alpha1.ArgoRolloutConfigKeeper{}
 
 	Context("Configmap Tests", func() {
 		BeforeAll(func() {
-			manageConfigmaps(ctx, "create")
-			manageReplicas(ctx, "create", 1)
+			manageConfigmaps(ctx, namespace, "create")
+			manageReplicas(ctx, namespace, "create", 1)
 			By("creating the custom resource for the Kind ArgoRolloutConfigKeeper")
-			err := k8sClient.Get(ctx, typeNamespacedName, argorolloutconfigkeeper)
+			err := k8sClient.Get(ctx, typeNamespacedName, argoRolloutConfigKeeper)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &keeperv1alpha1.ArgoRolloutConfigKeeper{
 					ObjectMeta: metav1.ObjectMeta{
@@ -76,8 +78,8 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			manageConfigmaps(ctx, "delete")
-			manageReplicas(ctx, "delete", 0)
+			manageConfigmaps(ctx, namespace, "delete")
+			manageReplicas(ctx, namespace, "delete", 0)
 			resource := &keeperv1alpha1.ArgoRolloutConfigKeeper{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
@@ -107,19 +109,19 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			configMap, err := getConfigmap(ctx, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			configMap, err := getConfigmap(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configMap.Finalizers).To(ContainElement(finalizerNameFullName))
 		})
 		It("Should remove the finalizer from the configmap and add IgnoreExtraneous annotation", func() {
 			By("Updating the replicaset to 0")
-			manageReplicas(ctx, "update", 0)
+			manageReplicas(ctx, namespace, "update", 0)
 			By("Reconciling the created resource")
 			var (
 				err       error
 				configMap *corev1.ConfigMap
 			)
-			configMap, err = getConfigmap(ctx, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			configMap, err = getConfigmap(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
 
 			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
 				Client: k8sClient,
@@ -130,7 +132,7 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			configMap, err = getConfigmap(ctx, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			configMap, err = getConfigmap(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configMap.Finalizers).To(BeNil())
 			Expect(configMap.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
@@ -139,10 +141,10 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 
 	Context("Secret Tests", func() {
 		BeforeAll(func() {
-			manageSecrets(ctx, "create")
-			manageReplicas(ctx, "create", 1)
+			manageSecrets(ctx, namespace, "create")
+			manageReplicas(ctx, namespace, "create", 1)
 			By("creating the custom resource for the Kind ArgoRolloutConfigKeeper")
-			err := k8sClient.Get(ctx, typeNamespacedName, argorolloutconfigkeeper)
+			err := k8sClient.Get(ctx, typeNamespacedName, argoRolloutConfigKeeper)
 			if err != nil && errors.IsNotFound(err) {
 				resource := &keeperv1alpha1.ArgoRolloutConfigKeeper{
 					ObjectMeta: metav1.ObjectMeta{
@@ -159,8 +161,8 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			manageSecrets(ctx, "delete")
-			manageReplicas(ctx, "delete", 0)
+			manageSecrets(ctx, namespace, "delete")
+			manageReplicas(ctx, namespace, "delete", 0)
 			resource := &keeperv1alpha1.ArgoRolloutConfigKeeper{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
@@ -190,20 +192,20 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			secret, err := getSecret(ctx, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			secret, err := getSecret(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(secret.Finalizers).To(ContainElement(finalizerNameFullName))
 		})
 		It("Should remove the finalizer from the secret and add IgnoreExtraneous annotation", func() {
 			By("Updating the replicaset to 0")
-			manageReplicas(ctx, "update", 0)
+			manageReplicas(ctx, namespace, "update", 0)
 			By("Reconciling the created resource")
 			var (
 				err    error
 				secret *corev1.Secret
 			)
 
-			secret, err = getSecret(ctx, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			secret, err = getSecret(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
 
 			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
 				Client: k8sClient,
@@ -214,7 +216,7 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			secret, err = getSecret(ctx, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			secret, err = getSecret(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(secret.Finalizers).To(BeNil())
 			Expect(secret.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
@@ -223,7 +225,7 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 
 })
 
-func manageConfigmaps(ctx context.Context, operation string) {
+func manageConfigmaps(ctx context.Context, namespace, operation string) {
 
 	configmap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -257,13 +259,13 @@ func manageConfigmaps(ctx context.Context, operation string) {
 	}
 }
 
-func getConfigmap(ctx context.Context, name string) (*corev1.ConfigMap, error) {
+func getConfigmap(ctx context.Context, namespace, name string) (*corev1.ConfigMap, error) {
 	configmap := &corev1.ConfigMap{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, configmap)
 	return configmap, err
 }
 
-func manageSecrets(ctx context.Context, operation string) {
+func manageSecrets(ctx context.Context, namespace, operation string) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion),
@@ -297,13 +299,13 @@ func manageSecrets(ctx context.Context, operation string) {
 	}
 }
 
-func getSecret(ctx context.Context, name string) (*corev1.Secret, error) {
+func getSecret(ctx context.Context, namespace, name string) (*corev1.Secret, error) {
 	secret := &corev1.Secret{}
 	err := k8sClient.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, secret)
 	return secret, err
 }
 
-func manageReplicas(ctx context.Context, operation string, replicaNumber int) {
+func manageReplicas(ctx context.Context, namespace, operation string, replicaNumber int) {
 	replicaNum := int32(replicaNumber)
 	replica := &appsv1.ReplicaSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -414,6 +416,27 @@ func manageReplicas(ctx context.Context, operation string, replicaNumber int) {
 		// update replica
 		Expect(k8sClient.Update(ctx, replica)).To(Succeed())
 		Expect(k8sClient.Update(ctx, replicaPreview)).To(Succeed())
+		break
+	default:
+		panic("Invalid operation")
+	}
+}
+
+func manageNamespace(ctx context.Context, name, operation string) {
+	namespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+
+	switch operation {
+	case "create":
+		// create namespace
+		Expect(k8sClient.Create(ctx, namespace)).To(Succeed())
+		break
+	case "delete":
+		// delete namespace
+		Expect(k8sClient.Delete(ctx, namespace)).To(Succeed())
 		break
 	default:
 		panic("Invalid operation")
