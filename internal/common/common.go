@@ -58,8 +58,8 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileConfigMaps(ctx context.Context,
 							return err
 						}
 
-						if latestVersion, err := r.getLatestVersionOfReplicaSet(ctx, c.Namespace, strings.Split(finalizerFullName, "/")[1]); err != nil {
-							r.Logger.Error(err, "unable to get latest version of replicaset")
+						if latestVersion, err := r.getLatestVersionOfConfig(ctx, strings.Split(finalizerFullName, "/")[1], &c); err != nil {
+							r.Logger.Error(err, "unable to get latest version of configmap")
 							return err
 						} else {
 							if err := r.ignoreExtraneousOperation(ctx, &c, latestVersion); err != nil {
@@ -112,8 +112,8 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileSecrets(ctx context.Context, na
 							return err
 						}
 
-						if latestVersion, err := r.getLatestVersionOfReplicaSet(ctx, s.Namespace, strings.Split(finalizerFullName, "/")[1]); err != nil {
-							r.Logger.Error(err, "unable to get latest version of replicaset")
+						if latestVersion, err := r.getLatestVersionOfConfig(ctx, strings.Split(finalizerFullName, "/")[1], &s); err != nil {
+							r.Logger.Error(err, "unable to get latest version of secret")
 							return err
 						} else {
 							if err := r.ignoreExtraneousOperation(ctx, &s, latestVersion); err != nil {
@@ -357,4 +357,73 @@ func (r *ArgoRolloutConfigKeeperCommon) listSecrets(ctx context.Context, namespa
 	}
 
 	return secrets, nil
+}
+
+func (r *ArgoRolloutConfigKeeperCommon) getLatestVersionOfConfig(ctx context.Context, finalizerFullName string, T interface{}) (*goversion.Version, error) {
+
+	switch t := T.(type) {
+	case *corev1.ConfigMap:
+
+		labels := tools.CopyMap(t.Labels)
+		// need to remove the appVersion label from the labels to all configMaps
+		delete(labels, r.Labels.AppVersionLabel)
+		latestVersion, err := r.getLatestVersionOfReplicaSet(ctx, t.Namespace, finalizerFullName)
+		if err != nil {
+			r.Logger.Error(err, "unable to get latest version of replicaset")
+			return nil, err
+		}
+
+		if latestVersion == nil {
+			if configMaps, err := r.listConfigMaps(ctx, t.Namespace, labels); err != nil {
+				return nil, err
+			} else {
+				for _, c := range configMaps.Items {
+					if val, ok := c.Labels[r.Labels.AppVersionLabel]; ok {
+						ver, err := goversion.NewVersion(val)
+						if err != nil {
+							r.Logger.Error(err, "unable to parse version")
+							return nil, err
+						}
+						if latestVersion == nil || ver.GreaterThan(latestVersion) {
+							latestVersion = ver
+						}
+					}
+				}
+			}
+		}
+		return latestVersion, nil
+	case *corev1.Secret:
+		labels := tools.CopyMap(t.Labels)
+
+		// need to remove the appVersion label from the labels to all secrets
+		delete(labels, r.Labels.AppVersionLabel)
+		latestVersion, err := r.getLatestVersionOfReplicaSet(ctx, t.Namespace, finalizerFullName)
+		if err != nil {
+			r.Logger.Error(err, "unable to get latest version of replicaset")
+			return nil, err
+		}
+
+		if latestVersion == nil {
+			r.Logger.Info("could not get latest version from replicaset, trying to get from secrets")
+			if secrets, err := r.listSecrets(ctx, t.Namespace, labels); err != nil {
+				return nil, err
+			} else {
+				for _, c := range secrets.Items {
+					if val, ok := c.Labels[r.Labels.AppVersionLabel]; ok {
+						ver, err := goversion.NewVersion(val)
+						if err != nil {
+							r.Logger.Error(err, "unable to parse version")
+							return nil, err
+						}
+						if latestVersion == nil || ver.GreaterThan(latestVersion) {
+							latestVersion = ver
+						}
+					}
+				}
+			}
+		}
+		return latestVersion, nil
+	default:
+		return nil, fmt.Errorf("unsupported type: %T", T)
+	}
 }
