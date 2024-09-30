@@ -30,3 +30,11 @@ func CreateMapFromStringList(list []string) map[string]bool {
 	}
 	return result
 }
+
+func CopyMap(m map[string]string) map[string]string {
+	result := make(map[string]string)
+	for k, v := range m {
+		result[k] = v
+	}
+	return result
+}
