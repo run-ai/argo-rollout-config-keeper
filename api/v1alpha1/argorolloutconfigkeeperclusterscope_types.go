@@ -52,7 +52,7 @@ func (in *ArgoRolloutConfigKeeperClusterScopeSpec) UnmarshalJSON(b []byte) error
 
 // ArgoRolloutConfigKeeperClusterScopeStatus defines the observed state of ArgoRolloutConfigKeeperClusterScope
 type ArgoRolloutConfigKeeperClusterScopeStatus struct {
-	State string `json:"state"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -41,6 +41,41 @@ var (
 			Name: "argo_rollout_config_keeper_overall_reconcile_duration_seconds",
 			Help: "Time taken to reconcile overall process",
 		})
+	ManagedConfigMapClusterScopeCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "argo_rollout_config_keeper_managed_configmap_clusterscope_count",
+			Help: "Number of managed configmaps by argo rollout config keeper cluster scope operator",
+		})
+	ManagedSecretClusterScopeCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "argo_rollout_config_keeper_managed_secret_clusterscope_count",
+			Help: "Number of managed secrets by argo rollout config keeper cluster scope operator",
+		})
+	DiscoveredConfigMapClusterScopeCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "argo_rollout_config_keeper_discovered_configmap_clusterscope_count",
+			Help: "Number of discovered configmaps by argo rollout config keeper cluster scope operator",
+		})
+	DiscoveredSecretClusterScopeCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "argo_rollout_config_keeper_discovered_secret_clusterscope_count",
+			Help: "Number of discovered secrets by argo rollout config keeper cluster scope operator",
+		})
+	ConfigMapClusterScopeReconcileDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name: "argo_rollout_config_keeper_configmap_clusterscope_reconcile_duration_seconds",
+			Help: "Time taken to reconcile configmaps by argo rollout config keeper cluster scope operator",
+		})
+	SecretClusterScopeReconcileDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name: "argo_rollout_config_keeper_secret_clusterscope_reconcile_duration_seconds",
+			Help: "Time taken to reconcile secrets by argo rollout config keeper cluster scope operator",
+		})
+	OverallClusterScopeReconcileDuration = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name: "argo_rollout_config_keeper_overall_clusterscope_reconcile_duration_seconds",
+			Help: "Time taken to reconcile overall process by argo rollout config keeper cluster scope operator",
+		})
 )
 
 func init() {

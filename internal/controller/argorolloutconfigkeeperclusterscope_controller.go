@@ -20,6 +20,8 @@ import (
 	"context"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/go-logr/logr"
 	configkeeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
 	"github.com/run-ai/argo-rollout-config-keeper/internal/common"
@@ -48,22 +50,28 @@ type ArgoRolloutConfigKeeperClusterScopeReconciler struct {
 func (r *ArgoRolloutConfigKeeperClusterScopeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.logger = log.FromContext(ctx)
 	defer func() {
-		metrics.OverallReconcileDuration.Observe(time.Since(time.Now()).Seconds())
+		metrics.OverallClusterScopeReconcileDuration.Observe(time.Since(time.Now()).Seconds())
 	}()
 
 	configKeeperCommon := common.ArgoRolloutConfigKeeperCommon{
 		Client: r.Client,
-		Scheme: r.Scheme,
 		Logger: r.logger,
 	}
 
 	configKeeperClusterScope := &configkeeperv1alpha1.ArgoRolloutConfigKeeperClusterScope{}
 	if err := r.Get(ctx, req.NamespacedName, configKeeperClusterScope); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeperClusterScope, ArgoRolloutConfigStateInitializing); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+	argoRolloutConfigStateClusterScopeInitializing := metav1.Condition{
+		Type:    ArgoRolloutConfigStateInitializing,
+		Status:  metav1.ConditionFalse,
+		Reason:  "ArgoRolloutConfigKeeperClusterScopeInitializing",
+		Message: "ArgoRolloutConfigKeeperClusterScope is initializing",
+	}
+
+	if err := configKeeperCommon.UpdateCondition(ctx, configKeeperClusterScope, argoRolloutConfigStateClusterScopeInitializing); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	configKeeperCommon.Labels = &common.ArgoRolloutConfigKeeperLabels{
@@ -72,8 +80,15 @@ func (r *ArgoRolloutConfigKeeperClusterScopeReconciler) Reconcile(ctx context.Co
 	}
 	configKeeperCommon.FinalizerName = configKeeperClusterScope.Spec.FinalizerName
 
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeperClusterScope, ArgoRolloutConfigStateReconcilingConfigmaps); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+	argoRolloutConfigStateClusterScopeReady := metav1.Condition{
+		Type:    ArgoRolloutConfigStateReady,
+		Status:  metav1.ConditionTrue,
+		Reason:  "ArgoRolloutConfigKeeperClusterScopeReady",
+		Message: "ArgoRolloutConfigKeeperClusterScope is ready",
+	}
+
+	if err := configKeeperCommon.UpdateCondition(ctx, configKeeperClusterScope, argoRolloutConfigStateClusterScopeReady); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	labelSelector := map[string]string{}
@@ -84,20 +99,14 @@ func (r *ArgoRolloutConfigKeeperClusterScopeReconciler) Reconcile(ctx context.Co
 	ignoredNamespaces := tools.CreateMapFromStringList(configKeeperClusterScope.Spec.IgnoredNamespaces)
 
 	if err := configKeeperCommon.ReconcileConfigMaps(ctx, "", labelSelector, ignoredNamespaces); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeperClusterScope, ArgoRolloutConfigStateReconcilingSecrets); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
-	}
 	// need to list all secrets in namespace
 	if err := configKeeperCommon.ReconcileSecrets(ctx, "", labelSelector, ignoredNamespaces); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeperClusterScope, ArgoRolloutConfigStateFinished); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
-	}
 	return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 }
 

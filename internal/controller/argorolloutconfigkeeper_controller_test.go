@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -406,16 +407,19 @@ func manageReplicas(ctx context.Context, namespace, operation string, replicaNum
 		// create replica
 		Expect(k8sClient.Create(ctx, replica)).To(Succeed())
 		Expect(k8sClient.Create(ctx, replicaPreview)).To(Succeed())
+		time.Sleep(2 * time.Second)
 		break
 	case "delete":
 		// delete replica
 		Expect(k8sClient.Delete(ctx, replica)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, replicaPreview)).To(Succeed())
+		time.Sleep(2 * time.Second)
 		break
 	case "update":
 		// update replica
 		Expect(k8sClient.Update(ctx, replica)).To(Succeed())
 		Expect(k8sClient.Update(ctx, replicaPreview)).To(Succeed())
+		time.Sleep(2 * time.Second)
 		break
 	default:
 		panic("Invalid operation")
