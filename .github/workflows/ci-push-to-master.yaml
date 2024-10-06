@@ -8,8 +8,6 @@ on:
       - '.github/**'
       - 'hack/**'
       - 'README.md'
-      - 'Makefile'
-      - 'Dockerfile'
       - 'PROJECT'
       - '.gitignore'
       - '.dockerignore'
