@@ -15,6 +15,7 @@ RUN go mod download
 COPY cmd/main.go cmd/main.go
 COPY api/ api/
 COPY internal/controller/*_controller.go internal/controller/
+COPY internal/controller/const.go internal/controller/
 COPY internal/metrics/ internal/metrics/
 COPY internal/tools/tools.go internal/tools/
 COPY internal/common/ internal/common/
