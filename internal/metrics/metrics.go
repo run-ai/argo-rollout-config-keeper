@@ -101,5 +101,12 @@ func registerOwnMetrics() []interface{} {
 		ConfigMapReconcileDuration,
 		SecretReconcileDuration,
 		OverallReconcileDuration,
+		ManagedConfigMapClusterScopeCount,
+		ManagedSecretClusterScopeCount,
+		DiscoveredConfigMapClusterScopeCount,
+		DiscoveredSecretClusterScopeCount,
+		ConfigMapClusterScopeReconcileDuration,
+		SecretClusterScopeReconcileDuration,
+		OverallClusterScopeReconcileDuration,
 	}
 }
