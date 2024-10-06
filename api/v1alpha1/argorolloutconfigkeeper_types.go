@@ -51,7 +51,7 @@ func (in *ArgoRolloutConfigKeeperSpec) UnmarshalJSON(b []byte) error {
 
 // ArgoRolloutConfigKeeperStatus defines the observed state of ArgoRolloutConfigKeeper
 type ArgoRolloutConfigKeeperStatus struct {
-	State string `json:"state"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true

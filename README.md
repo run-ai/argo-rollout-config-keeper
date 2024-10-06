@@ -2,7 +2,23 @@
 
 argo-rollout-config-keeper is a Kubernetes controller for managing Argo Rollout application configurations. It ensures that the specified configurations versions are applied and maintained across the cluster.
 
-Its Also adding the following annotation to the outdated version of managed configMaps and secrets: `argocd.argoproj.io/compare-options: IgnoreExtraneous` to ignore them from the application sync global status. More details can be found in [ArgoCd documentation](https://argo-cd.readthedocs.io/en/stable/user-guide/compare-options/)
+It's Also adding the following annotation to the outdated version of managed configMaps and secrets: `argocd.argoproj.io/compare-options: IgnoreExtraneous` to ignore them from the application sync global status. More details can be found in [ArgoCd documentation](https://argo-cd.readthedocs.io/en/stable/user-guide/compare-options/)
+
+There are two main CRDs that the controller is managing:
+- ArgoRolloutConfigKeeper.
+- ArgoRolloutConfigKeeperClusterScope.
+
+The ArgoRolloutConfigKeeper is managing the configMaps and secrets in the namespace scope, while the ArgoRolloutConfigKeeperClusterScope is managing the configMaps and secrets in the cluster scope.
+
+> [!WARNING]
+>
+> Please note, both CRDs are having the following optional fields to override the operator defaults values, and it's important for the operator mechanism because it filtered the ReplicaSets by them:
+> - `appLabel`, if it not set it will get the following default value: `app.kubernetes.io/name`.
+> - `appVersionLabel`, if it not set it will get the following default value: `app.kubernetes.io/version`.
+
+you can see example yamls, [here](../config/samples/): 
+
+
 ## Getting Started
 
 ### Prerequisites

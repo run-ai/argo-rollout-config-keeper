@@ -18,8 +18,9 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/go-logr/logr"
 	keeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
@@ -39,15 +40,6 @@ type ArgoRolloutConfigKeeperReconciler struct {
 	logger logr.Logger
 }
 
-const (
-	ArgoRolloutConfigStateInitializing                     = "initializing"
-	ArgoRolloutConfigStateReconcilingConfigmapsInNamespace = "reconciling configmaps in namespace %s"
-	ArgoRolloutConfigStateReconcilingSecretsInNamespace    = "reconciling secrets in namespace %s"
-	ArgoRolloutConfigStateReconcilingConfigmaps            = "reconciling configmaps in all namespaces"
-	ArgoRolloutConfigStateReconcilingSecrets               = "reconciling secrets in all namespaces"
-	ArgoRolloutConfigStateFinished                         = "finished"
-)
-
 //+kubebuilder:rbac:groups=configkeeper.run.ai,resources=argorolloutconfigkeepers,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=configkeeper.run.ai,resources=argorolloutconfigkeepers/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=configkeeper.run.ai,resources=argorolloutconfigkeepers/finalizers,verbs=update
@@ -61,16 +53,23 @@ func (r *ArgoRolloutConfigKeeperReconciler) Reconcile(ctx context.Context, req c
 	}()
 	configKeeperCommon := common.ArgoRolloutConfigKeeperCommon{
 		Client: r.Client,
-		Scheme: r.Scheme,
 		Logger: r.logger,
 	}
 
 	configKeeper := &keeperv1alpha1.ArgoRolloutConfigKeeper{}
 	if err := r.Get(ctx, req.NamespacedName, configKeeper); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeper, ArgoRolloutConfigStateInitializing); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+
+	argoRolloutConfigStateInitializing := metav1.Condition{
+		Type:    ArgoRolloutConfigStateInitializing,
+		Status:  metav1.ConditionFalse,
+		Reason:  "ArgoRolloutConfigKeeperInitializing",
+		Message: "ArgoRolloutConfigKeeper is initializing",
+	}
+
+	if err := configKeeperCommon.UpdateCondition(ctx, configKeeper, argoRolloutConfigStateInitializing); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	configKeeperCommon.Labels = &common.ArgoRolloutConfigKeeperLabels{
@@ -79,8 +78,15 @@ func (r *ArgoRolloutConfigKeeperReconciler) Reconcile(ctx context.Context, req c
 	}
 	configKeeperCommon.FinalizerName = configKeeper.Spec.FinalizerName
 
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeper, fmt.Sprintf(ArgoRolloutConfigStateReconcilingConfigmapsInNamespace, req.Namespace)); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+	argoRolloutConfigStateReady := metav1.Condition{
+		Type:    ArgoRolloutConfigStateReady,
+		Status:  metav1.ConditionTrue,
+		Reason:  "ArgoRolloutConfigKeeperReady",
+		Message: "ArgoRolloutConfigKeeper is ready",
+	}
+
+	if err := configKeeperCommon.UpdateCondition(ctx, configKeeper, argoRolloutConfigStateReady); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	labelSelector := map[string]string{}
@@ -89,21 +95,14 @@ func (r *ArgoRolloutConfigKeeperReconciler) Reconcile(ctx context.Context, req c
 	}
 
 	if err := configKeeperCommon.ReconcileConfigMaps(ctx, req.Namespace, labelSelector, map[string]bool{}); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, client.IgnoreNotFound(err)
-	}
-
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeper, fmt.Sprintf(ArgoRolloutConfigStateReconcilingSecretsInNamespace, req.Namespace)); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// need to list all secrets in namespace
 	if err := configKeeperCommon.ReconcileSecrets(ctx, req.Namespace, labelSelector, map[string]bool{}); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if err := configKeeperCommon.UpdateStatus(ctx, configKeeper, ArgoRolloutConfigStateFinished); err != nil {
-		return ctrl.Result{RequeueAfter: 1 * time.Minute}, err
-	}
 	return ctrl.Result{RequeueAfter: 1 * time.Minute}, nil
 }
 
