@@ -51,7 +51,7 @@ make install
 ```
 or
 ```sh
-kubectl apply -f github.com/run-ai/argo-rollout-config-keeper/rleasses/0.0.1/argo-rollout-config-keeper.yaml
+kubectl apply -f github.com/run-ai/argo-rollout-config-keeper/rleasses/v0.0.1/argo-rollout-config-keeper.yaml
 ``` 
 
 
@@ -97,6 +97,17 @@ Run unit tests
  ```sh
  make test
  ```
+
+## Grafana Dashboards
+
+![](./docs/grafana%20dashboards/grafana.png)
+
+Example dashboards can be found in the following links:
+
+[Cluster Scope Dashboard](./docs/grafana%20dashboards/cluster-scope-dashboard.json)
+
+[Namespace Scope Dashboard](./docs/grafana%20dashboards/namespace-scope-dashboard.json)
+
 ## Contributing
 
 Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to contribute to this project.
