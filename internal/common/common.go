@@ -35,16 +35,16 @@ type ArgoRolloutConfigKeeperCommon struct {
 func (r *ArgoRolloutConfigKeeperCommon) ReconcileConfigMaps(ctx context.Context, namespace string, labelSelector map[string]string, ignoredNamespaces map[string]bool) error {
 	defer func() {
 		if namespace != "" {
-			metrics.ConfigMapClusterScopeReconcileDuration.Observe(time.Since(time.Now()).Seconds())
-		} else {
 			metrics.ConfigMapReconcileDuration.Observe(time.Since(time.Now()).Seconds())
+		} else {
+			metrics.ConfigMapClusterScopeReconcileDuration.Observe(time.Since(time.Now()).Seconds())
 		}
 	}()
 
 	if namespace != "" {
-		metrics.ManagedConfigMapClusterScopeCount.Set(0)
-	} else {
 		metrics.ManagedConfigMapCount.Set(0)
+	} else {
+		metrics.ManagedConfigMapClusterScopeCount.Set(0)
 	}
 
 	configMaps, err := r.listConfigMaps(ctx, namespace, labelSelector)
@@ -52,9 +52,9 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileConfigMaps(ctx context.Context,
 		return err
 	}
 	if namespace != "" {
-		metrics.DiscoveredConfigMapClusterScopeCount.Set(float64(len(configMaps.Items)))
-	} else {
 		metrics.DiscoveredConfigMapCount.Set(float64(len(configMaps.Items)))
+	} else {
+		metrics.DiscoveredConfigMapClusterScopeCount.Set(float64(len(configMaps.Items)))
 	}
 
 	if configMaps.Items != nil {
@@ -70,9 +70,9 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileConfigMaps(ctx context.Context,
 
 				if havingManagedFinalizer {
 					if namespace != "" {
-						metrics.ManagedConfigMapClusterScopeCount.Inc()
-					} else {
 						metrics.ManagedConfigMapCount.Inc()
+					} else {
+						metrics.ManagedConfigMapClusterScopeCount.Inc()
 					}
 
 					if err := r.finalizerOperation(ctx, &c, finalizerFullName); err != nil {
@@ -110,15 +110,15 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileConfigMaps(ctx context.Context,
 func (r *ArgoRolloutConfigKeeperCommon) ReconcileSecrets(ctx context.Context, namespace string, labelSelector map[string]string, ignoredNamespaces map[string]bool) error {
 	defer func() {
 		if namespace != "" {
-			metrics.SecretClusterScopeReconcileDuration.Observe(time.Since(time.Now()).Seconds())
-		} else {
 			metrics.SecretReconcileDuration.Observe(time.Since(time.Now()).Seconds())
+		} else {
+			metrics.SecretClusterScopeReconcileDuration.Observe(time.Since(time.Now()).Seconds())
 		}
 	}()
 	if namespace != "" {
-		metrics.ManagedSecretClusterScopeCount.Set(0)
-	} else {
 		metrics.ManagedSecretCount.Set(0)
+	} else {
+		metrics.ManagedSecretClusterScopeCount.Set(0)
 	}
 
 	secrets, err := r.listSecrets(ctx, namespace, labelSelector)
@@ -126,9 +126,9 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileSecrets(ctx context.Context, na
 		return err
 	}
 	if namespace != "" {
-		metrics.DiscoveredSecretClusterScopeCount.Set(float64(len(secrets.Items)))
-	} else {
 		metrics.DiscoveredSecretCount.Set(float64(len(secrets.Items)))
+	} else {
+		metrics.DiscoveredSecretClusterScopeCount.Set(float64(len(secrets.Items)))
 	}
 
 	if secrets.Items != nil {
@@ -144,9 +144,9 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileSecrets(ctx context.Context, na
 
 				if havingManagedFinalizer {
 					if namespace != "" {
-						metrics.ManagedSecretClusterScopeCount.Inc()
-					} else {
 						metrics.ManagedSecretCount.Inc()
+					} else {
+						metrics.ManagedSecretClusterScopeCount.Inc()
 					}
 
 					if err := r.finalizerOperation(ctx, &s, finalizerFullName); err != nil {
