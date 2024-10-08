@@ -59,4 +59,4 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          make docker-build docker-push IMG="${{ secrets.DOCKERHUB_USERNAME }}/argo-rollout-config-keeper-operator:v${{ github.ref_name }}"
+          make docker-build docker-push IMG="${{ secrets.DOCKERHUB_USERNAME }}/argo-rollout-config-keeper-operator:${{ github.ref_name }}"
