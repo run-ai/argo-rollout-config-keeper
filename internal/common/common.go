@@ -76,18 +76,36 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileConfigMaps(ctx context.Context,
 					}
 
 					if err := r.finalizerOperation(ctx, &c, finalizerFullName); err != nil {
-						return err
+						r.Logger.Error(err, "unable to remove finalizer from configmap")
+						if namespace != "" {
+							metrics.FailuresInConfigMapClusterScopeCount.Inc()
+						} else {
+							metrics.FailuresInConfigMapCount.Inc()
+						}
+						continue
 					}
 
 					latestVersion, err := r.getLatestVersionOfConfig(ctx, strings.Split(finalizerFullName, "/")[1], &c)
 					if err != nil {
 						r.Logger.Error(err, "unable to get latest version of configmap")
-						return err
+
+						if namespace != "" {
+							metrics.FailuresInConfigMapClusterScopeCount.Inc()
+						} else {
+							metrics.FailuresInConfigMapCount.Inc()
+						}
+						continue
 					}
 
 					err = r.ignoreExtraneousOperation(ctx, &c, latestVersion)
 					if err != nil {
-						return err
+						r.Logger.Error(err, "unable to add IgnoreExtraneous annotation to configmap")
+						if namespace != "" {
+							metrics.FailuresInConfigMapClusterScopeCount.Inc()
+						} else {
+							metrics.FailuresInConfigMapCount.Inc()
+						}
+						continue
 					}
 				} else {
 					r.Logger.Info(fmt.Sprintf("skipping %s configmap, reason: no manageable finalizer", c.Name))
@@ -150,17 +168,34 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileSecrets(ctx context.Context, na
 					}
 
 					if err := r.finalizerOperation(ctx, &s, finalizerFullName); err != nil {
+						r.Logger.Error(err, "unable to remove finalizer from secret")
+						if namespace != "" {
+							metrics.FailuresInSecretClusterScopeCount.Inc()
+						} else {
+							metrics.FailuresInSecretCount.Inc()
+						}
 						return err
 					}
 
 					latestVersion, err := r.getLatestVersionOfConfig(ctx, strings.Split(finalizerFullName, "/")[1], &s)
 					if err != nil {
 						r.Logger.Error(err, "unable to get latest version of secret")
-						return err
+						if namespace != "" {
+							metrics.FailuresInSecretClusterScopeCount.Inc()
+						} else {
+							metrics.FailuresInSecretCount.Inc()
+						}
+						continue
 					}
 					err = r.ignoreExtraneousOperation(ctx, &s, latestVersion)
 					if err != nil {
-						return err
+						r.Logger.Error(err, "unable to add IgnoreExtraneous annotation to secret")
+						if namespace != "" {
+							metrics.FailuresInSecretClusterScopeCount.Inc()
+						} else {
+							metrics.FailuresInSecretCount.Inc()
+						}
+						continue
 					}
 				} else {
 					r.Logger.Info(fmt.Sprintf("skipping %s secret, reason: no manageable finalizer", s.Name))

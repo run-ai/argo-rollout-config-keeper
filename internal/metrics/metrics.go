@@ -26,6 +26,16 @@ var (
 			Name: "argo_rollout_config_keeper_discovered_secret_count",
 			Help: "Number of discovered secrets by argo rollout config keeper operator",
 		})
+	FailuresInConfigMapCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "argo_rollout_config_keeper_failures_configmap_count",
+			Help: "Number of failures in configmap reconciliation",
+		})
+	FailuresInSecretCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "argo_rollout_config_keeper_failures_secret_count",
+			Help: "Number of failures in secret reconciliation",
+		})
 	ConfigMapReconcileDuration = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
 			Name: "argo_rollout_config_keeper_configmap_reconcile_duration_seconds",
@@ -60,6 +70,16 @@ var (
 		prometheus.GaugeOpts{
 			Name: "argo_rollout_config_keeper_discovered_secret_clusterscope_count",
 			Help: "Number of discovered secrets by argo rollout config keeper cluster scope operator",
+		})
+	FailuresInConfigMapClusterScopeCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "argo_rollout_config_keeper_failures_configmap_clusterscope_count",
+			Help: "Number of failures in configmap reconciliation by argo rollout config keeper cluster scope operator",
+		})
+	FailuresInSecretClusterScopeCount = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "argo_rollout_config_keeper_failures_secret_clusterscope_count",
+			Help: "Number of failures in secret reconciliation by argo rollout config keeper cluster scope operator",
 		})
 	ConfigMapClusterScopeReconcileDuration = prometheus.NewHistogram(
 		prometheus.HistogramOpts{
@@ -98,6 +118,8 @@ func registerOwnMetrics() []interface{} {
 		ManagedSecretCount,
 		DiscoveredConfigMapCount,
 		DiscoveredSecretCount,
+		FailuresInConfigMapCount,
+		FailuresInSecretCount,
 		ConfigMapReconcileDuration,
 		SecretReconcileDuration,
 		OverallReconcileDuration,
@@ -105,6 +127,8 @@ func registerOwnMetrics() []interface{} {
 		ManagedSecretClusterScopeCount,
 		DiscoveredConfigMapClusterScopeCount,
 		DiscoveredSecretClusterScopeCount,
+		FailuresInConfigMapClusterScopeCount,
+		FailuresInSecretClusterScopeCount,
 		ConfigMapClusterScopeReconcileDuration,
 		SecretClusterScopeReconcileDuration,
 		OverallClusterScopeReconcileDuration,
