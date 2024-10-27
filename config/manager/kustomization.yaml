@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: docker.io/runaidevops/argo-rollout-config-keeper-operator
-  newTag: v0.0.1
+  newTag: v0.0.2

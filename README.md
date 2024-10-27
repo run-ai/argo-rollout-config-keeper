@@ -51,7 +51,7 @@ make install
 ```
 or
 ```sh
-kubectl apply -f github.com/run-ai/argo-rollout-config-keeper/rleasses/v0.0.1/argo-rollout-config-keeper.yaml
+kubectl apply -f github.com/run-ai/argo-rollout-config-keeper/rleasses/v0.0.2/argo-rollout-config-keeper.yaml
 ``` 
 
 
