@@ -12,7 +12,6 @@ import (
 	"github.com/run-ai/argo-rollout-config-keeper/internal/tools"
 
 	"github.com/go-logr/logr"
-	goversion "github.com/hashicorp/go-version"
 	keeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
 	"github.com/run-ai/argo-rollout-config-keeper/internal/metrics"
 	appsv1 "k8s.io/api/apps/v1"
@@ -85,19 +84,7 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileConfigMaps(ctx context.Context,
 						continue
 					}
 
-					latestVersion, err := r.getLatestVersionOfConfig(ctx, strings.Split(finalizerFullName, "/")[1], &c)
-					if err != nil {
-						r.Logger.Error(err, "unable to get latest version of configmap")
-
-						if namespace != "" {
-							metrics.FailuresInConfigMapClusterScopeCount.Inc()
-						} else {
-							metrics.FailuresInConfigMapCount.Inc()
-						}
-						continue
-					}
-
-					err = r.ignoreExtraneousOperation(ctx, &c, latestVersion)
+					err = r.ignoreExtraneousOperation(ctx, &c, strings.Split(finalizerFullName, "/")[1])
 					if err != nil {
 						r.Logger.Error(err, "unable to add IgnoreExtraneous annotation to configmap")
 						if namespace != "" {
@@ -177,17 +164,7 @@ func (r *ArgoRolloutConfigKeeperCommon) ReconcileSecrets(ctx context.Context, na
 						return err
 					}
 
-					latestVersion, err := r.getLatestVersionOfConfig(ctx, strings.Split(finalizerFullName, "/")[1], &s)
-					if err != nil {
-						r.Logger.Error(err, "unable to get latest version of secret")
-						if namespace != "" {
-							metrics.FailuresInSecretClusterScopeCount.Inc()
-						} else {
-							metrics.FailuresInSecretCount.Inc()
-						}
-						continue
-					}
-					err = r.ignoreExtraneousOperation(ctx, &s, latestVersion)
+					err = r.ignoreExtraneousOperation(ctx, &s, strings.Split(finalizerFullName, "/")[1])
 					if err != nil {
 						r.Logger.Error(err, "unable to add IgnoreExtraneous annotation to secret")
 						if namespace != "" {
@@ -264,16 +241,24 @@ func (r *ArgoRolloutConfigKeeperCommon) finalizerOperation(ctx context.Context, 
 
 }
 
-func (r *ArgoRolloutConfigKeeperCommon) ignoreExtraneousOperation(ctx context.Context, T interface{}, latestVersion *goversion.Version) error {
+func (r *ArgoRolloutConfigKeeperCommon) ignoreExtraneousOperation(ctx context.Context, T interface{}, appLabelValue string) error {
 	switch t := T.(type) {
 	case *corev1.ConfigMap:
-		configMapVersion, err := goversion.NewVersion(t.Labels[r.Labels.AppVersionLabel])
+		labelSelector := map[string]string{
+			r.Labels.AppLabel:        appLabelValue,
+			r.Labels.AppVersionLabel: t.Labels[r.Labels.AppVersionLabel],
+		}
+		replicaSets, err := r.getFilteredReplicaSets(ctx, t.Namespace, labelSelector)
+
 		if err != nil {
-			r.Logger.Error(err, "unable to parse version")
+			r.Logger.Error(err, "unable to get filtered replicasets")
 			return err
 		}
-		if configMapVersion.LessThan(latestVersion) {
-			r.Logger.Info(fmt.Sprintf("adding IgnoreExtraneous annotation to %s configmap, reason: version is less than latest version", t.Name))
+
+		rsAnnotation := replicaSets.Items[0].Annotations["rollout.argoproj.io/ephemeral-metadata"]
+		// if replicaSet Annotation is not nil or empty, and having the following value: '{"labels":{"role":"preview"}}' or '{"labels":{"role":"canary"}}' it should add IgnoreExtraneous annotation
+		if rsAnnotation != "" && (rsAnnotation == `{"labels":{"role":"preview"}}` || rsAnnotation == `{"labels":{"role":"canary"}}`) {
+			r.Logger.Info(fmt.Sprintf("adding IgnoreExtraneous annotation to %s configmap, reason: replica has rollout.argoproj.io/ephemeral-metadata annotation", t.Name))
 			if t.Annotations != nil {
 				t.Annotations["argocd.argoproj.io/compare-options"] = "IgnoreExtraneous"
 			} else {
@@ -286,26 +271,37 @@ func (r *ArgoRolloutConfigKeeperCommon) ignoreExtraneousOperation(ctx context.Co
 				return err
 			}
 		}
+
 		return nil
 	case *corev1.Secret:
-		secretVersion, err := goversion.NewVersion(t.Labels[r.Labels.AppVersionLabel])
+		labelSelector := map[string]string{
+			r.Labels.AppLabel:        appLabelValue,
+			r.Labels.AppVersionLabel: t.Labels[r.Labels.AppVersionLabel],
+		}
+		replicaSets, err := r.getFilteredReplicaSets(ctx, t.Namespace, labelSelector)
+
 		if err != nil {
-			r.Logger.Error(err, "unable to parse version")
+			r.Logger.Error(err, "unable to get filtered replicasets")
 			return err
 		}
-		if secretVersion.LessThan(latestVersion) {
-			r.Logger.Info(fmt.Sprintf("adding IgnoreExtraneous annotation to %s secret, reason: version is less than latest version", t.Name))
+
+		rsAnnotation := replicaSets.Items[0].Annotations["rollout.argoproj.io/ephemeral-metadata"]
+		// if replicaSet Annotation is not nil or empty, and having the following value: '{"labels":{"role":"preview"}}' or '{"labels":{"role":"canary"}}' it should add IgnoreExtraneous annotation
+		if rsAnnotation != "" && (rsAnnotation == `{"labels":{"role":"preview"}}` || rsAnnotation == `{"labels":{"role":"canary"}}`) {
+			r.Logger.Info(fmt.Sprintf("adding IgnoreExtraneous annotation to %s secret, reason: replica has rollout.argoproj.io/ephemeral-metadata annotation", t.Name))
 			if t.Annotations != nil {
 				t.Annotations["argocd.argoproj.io/compare-options"] = "IgnoreExtraneous"
 			} else {
 				t.Annotations = map[string]string{"argocd.argoproj.io/compare-options": "IgnoreExtraneous"}
 			}
+
 			err = r.Update(ctx, t)
 			if err != nil {
-				r.Logger.Error(err, "unable to update secret")
+				r.Logger.Error(err, "unable to update configmap")
 				return err
 			}
 		}
+
 		return nil
 	default:
 		return fmt.Errorf("unsupported type: %T", T)
@@ -347,38 +343,6 @@ func (r *ArgoRolloutConfigKeeperCommon) checkIfFinalizerInUse(ctx context.Contex
 	return false, nil
 }
 
-func (r *ArgoRolloutConfigKeeperCommon) getLatestVersionOfReplicaSet(ctx context.Context, namespace, appLabelValue string) (*goversion.Version, error) {
-	// need to list all ReplicaSets in namespace and filter by label
-	labelSelector := map[string]string{
-		r.Labels.AppLabel: appLabelValue,
-	}
-	replicaSets, err := r.getFilteredReplicaSets(ctx, namespace, labelSelector)
-
-	if err != nil {
-		r.Logger.Error(err, "unable to get filtered replicasets")
-		return nil, err
-	}
-
-	var latestVersion *goversion.Version
-
-	for _, replicaSet := range replicaSets.Items {
-		if val, ok := replicaSet.Labels[r.Labels.AppVersionLabel]; ok {
-			ver, err := goversion.NewVersion(val)
-			if err != nil {
-				r.Logger.Error(err, "unable to parse version")
-				continue
-			}
-			if latestVersion == nil || ver.GreaterThan(latestVersion) {
-				latestVersion = ver
-			}
-		} else {
-			r.Logger.Info(fmt.Sprintf("replicaset %s does not have %s label", replicaSet.Name, r.Labels.AppVersionLabel))
-			continue
-		}
-	}
-	return latestVersion, nil
-}
-
 func (r *ArgoRolloutConfigKeeperCommon) listConfigMaps(ctx context.Context, namespace string, labelSelector map[string]string) (*corev1.ConfigMapList, error) {
 	configmaps := &corev1.ConfigMapList{}
 
@@ -407,75 +371,6 @@ func (r *ArgoRolloutConfigKeeperCommon) listSecrets(ctx context.Context, namespa
 	}
 
 	return secrets, nil
-}
-
-func (r *ArgoRolloutConfigKeeperCommon) getLatestVersionOfConfig(ctx context.Context, finalizerFullName string, T interface{}) (*goversion.Version, error) {
-
-	switch t := T.(type) {
-	case *corev1.ConfigMap:
-
-		labels := tools.CopyMap(t.Labels)
-		// need to remove the appVersion label from the labels to all configMaps
-		delete(labels, r.Labels.AppVersionLabel)
-		latestVersion, err := r.getLatestVersionOfReplicaSet(ctx, t.Namespace, finalizerFullName)
-		if err != nil {
-			r.Logger.Error(err, "unable to get latest version of replicaset")
-			return nil, err
-		}
-
-		if latestVersion == nil {
-			configMaps, err := r.listConfigMaps(ctx, t.Namespace, labels)
-			if err != nil {
-				return nil, err
-			}
-			for _, c := range configMaps.Items {
-				if val, ok := c.Labels[r.Labels.AppVersionLabel]; ok {
-					ver, err := goversion.NewVersion(val)
-					if err != nil {
-						r.Logger.Error(err, "unable to parse version")
-						return nil, err
-					}
-					if latestVersion == nil || ver.GreaterThan(latestVersion) {
-						latestVersion = ver
-					}
-				}
-			}
-		}
-		return latestVersion, nil
-	case *corev1.Secret:
-		labels := tools.CopyMap(t.Labels)
-
-		// need to remove the appVersion label from the labels to all secrets
-		delete(labels, r.Labels.AppVersionLabel)
-		latestVersion, err := r.getLatestVersionOfReplicaSet(ctx, t.Namespace, finalizerFullName)
-		if err != nil {
-			r.Logger.Error(err, "unable to get latest version of replicaset")
-			return nil, err
-		}
-
-		if latestVersion == nil {
-			r.Logger.Info("could not get latest version from replicaset, trying to get from secrets")
-			secrets, err := r.listSecrets(ctx, t.Namespace, labels)
-			if err != nil {
-				return nil, err
-			}
-			for _, c := range secrets.Items {
-				if val, ok := c.Labels[r.Labels.AppVersionLabel]; ok {
-					ver, err := goversion.NewVersion(val)
-					if err != nil {
-						r.Logger.Error(err, "unable to parse version")
-						return nil, err
-					}
-					if latestVersion == nil || ver.GreaterThan(latestVersion) {
-						latestVersion = ver
-					}
-				}
-			}
-		}
-		return latestVersion, nil
-	default:
-		return nil, fmt.Errorf("unsupported type: %T", T)
-	}
 }
 
 func (r *ArgoRolloutConfigKeeperCommon) UpdateCondition(ctx context.Context, T interface{}, condition metav1.Condition) error {
