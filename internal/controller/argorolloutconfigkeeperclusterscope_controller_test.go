@@ -31,7 +31,7 @@ import (
 	configkeeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
 )
 
-var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
+var _ = Describe("ArgoRolloutConfigKeeperClusterScope Controller", Ordered, func() {
 	typeNamespacedName := types.NamespacedName{
 		Name:      name,
 		Namespace: namespace,
@@ -85,6 +85,20 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 		})
+		It("ConfigMapPreviews should have IgnoreExtraneous annotation", func() {
+			controllerReconciler := &ArgoRolloutConfigKeeperClusterScopeReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+
+			configMapPreview, err := getConfigmap(ctx, configMapNamespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(configMapPreview.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
+		})
 		It("ConfigMap should have the finalizer", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &ArgoRolloutConfigKeeperClusterScopeReconciler{
@@ -100,7 +114,7 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configMap.Finalizers).To(ContainElement(finalizerNameFullName))
 		})
-		It("Should remove the finalizer from the configmap and add IgnoreExtraneous annotation", func() {
+		It("Should remove the finalizer from the configmap", func() {
 			By("Updating the replicaset to 0")
 			manageReplicas(ctx, configMapNamespace, "update", 0)
 			By("Reconciling the created resource")
@@ -122,7 +136,6 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			configMap, err = getConfigmap(ctx, configMapNamespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configMap.Finalizers).To(BeNil())
-			Expect(configMap.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
 		})
 	})
 
@@ -173,6 +186,11 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 		})
+		It("SecretPreviews should have IgnoreExtraneous annotation", func() {
+			secretPreview, err := getSecret(ctx, secretNamespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(secretPreview.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
+		})
 		It("Secret should have the finalizer", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &ArgoRolloutConfigKeeperClusterScopeReconciler{
@@ -188,7 +206,7 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(secret.Finalizers).To(ContainElement(finalizerNameFullName))
 		})
-		It("Should remove the finalizer from the secret and add IgnoreExtraneous annotation", func() {
+		It("Should remove the finalizer from the secret", func() {
 			By("Updating the replicaset to 0")
 			manageReplicas(ctx, secretNamespace, "update", 0)
 			By("Reconciling the created resource")
@@ -211,7 +229,6 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			secret, err = getSecret(ctx, secretNamespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(secret.Finalizers).To(BeNil())
-			Expect(secret.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
 		})
 	})
 })
