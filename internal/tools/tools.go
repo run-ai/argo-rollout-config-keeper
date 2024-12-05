@@ -2,6 +2,8 @@ package tools
 
 import (
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 func ContainsString(slice []string, s string) (string, bool) {
@@ -37,4 +39,16 @@ func CopyMap(m map[string]string) map[string]string {
 		result[k] = v
 	}
 	return result
+}
+
+func Int32Ptr(i int32) *int32 {
+	return &i
+}
+
+func IntOrStringPtr(s string) *intstr.IntOrString {
+	return &intstr.IntOrString{Type: intstr.String, StrVal: s}
+}
+
+func BoolPtr(b bool) *bool {
+	return &b
 }

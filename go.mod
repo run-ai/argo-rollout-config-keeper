@@ -3,8 +3,8 @@ module github.com/run-ai/argo-rollout-config-keeper
 go 1.22.4
 
 require (
+	github.com/argoproj/argo-rollouts v1.7.2
 	github.com/go-logr/logr v1.3.0
-	github.com/hashicorp/go-version v1.7.0
 	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.29.0
 	github.com/prometheus/client_golang v1.18.0
@@ -46,7 +46,6 @@ require (
 	github.com/prometheus/common v0.47.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect
 	golang.org/x/exp v0.0.0-20220722155223-a9213eeb770e // indirect

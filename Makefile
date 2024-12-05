@@ -311,3 +311,11 @@ catalog-push: ## Push a catalog image.
 .PHONY: create-kind-cluster
 create-kind-cluster: ## Create a kind cluster.
 	kind create cluster --name=argo-rollout-config-keeper
+
+.PHONY: install-argo-rollout
+install-argo-rollout: ## Install Argo Rollout.
+	{ \
+	kubectl create namespace argo-rollouts ;\
+    kubectl apply -n argo-rollouts -f https://github.com/argoproj/argo-rollouts/releases/latest/download/install.yaml ;\
+    kubectl wait --for=condition=available --timeout=600s deployment.apps/argo-rollouts -n argo-rollouts ;\
+	}

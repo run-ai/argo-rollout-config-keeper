@@ -18,6 +18,7 @@ package controller
 
 import (
 	"fmt"
+	argorolloutscheme "github.com/argoproj/argo-rollouts/pkg/client/clientset/versioned/scheme"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -75,6 +76,9 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	err = keeperv1alpha1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = argorolloutscheme.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = configkeeperv1alpha1.AddToScheme(scheme.Scheme)
