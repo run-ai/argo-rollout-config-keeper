@@ -45,6 +45,9 @@ jobs:
       - name: Create Kind cluster
         run: make create-kind-cluster
 
+      - name: Install argo-rollout
+        run: make install-argo-rollout
+
       - name: Make test
         env:
           USE_EXISTING_CLUSTER: "true"

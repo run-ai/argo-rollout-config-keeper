@@ -11,6 +11,7 @@ import (
 
 	"github.com/run-ai/argo-rollout-config-keeper/internal/tools"
 
+	v1alpha1 "github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	"github.com/go-logr/logr"
 	keeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
 	"github.com/run-ai/argo-rollout-config-keeper/internal/metrics"
@@ -248,27 +249,41 @@ func (r *ArgoRolloutConfigKeeperCommon) ignoreExtraneousOperation(ctx context.Co
 			r.Labels.AppLabel:        appLabelValue,
 			r.Labels.AppVersionLabel: t.Labels[r.Labels.AppVersionLabel],
 		}
-		replicaSets, err := r.getFilteredReplicaSets(ctx, t.Namespace, labelSelector)
+
+		rolloutLabelSelector := map[string]string{
+			r.Labels.AppLabel: appLabelValue,
+		}
+
+		rollout, err := r.checkIfRolloutActive(ctx, t.Namespace, rolloutLabelSelector)
 
 		if err != nil {
-			r.Logger.Error(err, "unable to get filtered replicasets")
+			r.Logger.Error(err, "unable to check if rollout is active")
 			return err
 		}
 
-		rsAnnotation := replicaSets.Items[0].Annotations["rollout.argoproj.io/ephemeral-metadata"]
-		// if replicaSet Annotation is not nil or empty, and having the following value: '{"labels":{"role":"preview"}}' or '{"labels":{"role":"canary"}}' it should add IgnoreExtraneous annotation
-		if rsAnnotation != "" && (rsAnnotation == `{"labels":{"role":"preview"}}` || rsAnnotation == `{"labels":{"role":"canary"}}`) {
-			r.Logger.Info(fmt.Sprintf("adding IgnoreExtraneous annotation to %s configmap, reason: replica has rollout.argoproj.io/ephemeral-metadata annotation", t.Name))
-			if t.Annotations != nil {
-				t.Annotations["argocd.argoproj.io/compare-options"] = "IgnoreExtraneous"
-			} else {
-				t.Annotations = map[string]string{"argocd.argoproj.io/compare-options": "IgnoreExtraneous"}
+		if rollout {
+			replicaSets, err := r.getFilteredReplicaSets(ctx, t.Namespace, labelSelector)
+
+			if err != nil {
+				r.Logger.Error(err, "unable to get filtered replicasets")
+				return err
 			}
 
-			err = r.Update(ctx, t)
-			if err != nil {
-				r.Logger.Error(err, "unable to update configmap")
-				return err
+			rsAnnotation := replicaSets.Items[0].Annotations["rollout.argoproj.io/ephemeral-metadata"]
+			// if replicaSet Annotation is not nil or empty, and having the following value: '{"labels":{"role":"preview"}}' or '{"labels":{"role":"canary"}}' it should add IgnoreExtraneous annotation
+			if rsAnnotation != "" && (rsAnnotation == `{"labels":{"role":"active"}}` || rsAnnotation == `{"labels":{"role":"stable"}}`) {
+				r.Logger.Info(fmt.Sprintf("adding IgnoreExtraneous annotation to %s configmap, reason: replica has rollout.argoproj.io/ephemeral-metadata annotation", t.Name))
+				if t.Annotations != nil {
+					t.Annotations["argocd.argoproj.io/compare-options"] = "IgnoreExtraneous"
+				} else {
+					t.Annotations = map[string]string{"argocd.argoproj.io/compare-options": "IgnoreExtraneous"}
+				}
+
+				err = r.Update(ctx, t)
+				if err != nil {
+					r.Logger.Error(err, "unable to update configmap")
+					return err
+				}
 			}
 		}
 
@@ -278,27 +293,41 @@ func (r *ArgoRolloutConfigKeeperCommon) ignoreExtraneousOperation(ctx context.Co
 			r.Labels.AppLabel:        appLabelValue,
 			r.Labels.AppVersionLabel: t.Labels[r.Labels.AppVersionLabel],
 		}
-		replicaSets, err := r.getFilteredReplicaSets(ctx, t.Namespace, labelSelector)
+
+		rolloutLabelSelector := map[string]string{
+			r.Labels.AppLabel: appLabelValue,
+		}
+
+		rollout, err := r.checkIfRolloutActive(ctx, t.Namespace, rolloutLabelSelector)
 
 		if err != nil {
-			r.Logger.Error(err, "unable to get filtered replicasets")
+			r.Logger.Error(err, "unable to check if rollout is active")
 			return err
 		}
 
-		rsAnnotation := replicaSets.Items[0].Annotations["rollout.argoproj.io/ephemeral-metadata"]
-		// if replicaSet Annotation is not nil or empty, and having the following value: '{"labels":{"role":"preview"}}' or '{"labels":{"role":"canary"}}' it should add IgnoreExtraneous annotation
-		if rsAnnotation != "" && (rsAnnotation == `{"labels":{"role":"preview"}}` || rsAnnotation == `{"labels":{"role":"canary"}}`) {
-			r.Logger.Info(fmt.Sprintf("adding IgnoreExtraneous annotation to %s secret, reason: replica has rollout.argoproj.io/ephemeral-metadata annotation", t.Name))
-			if t.Annotations != nil {
-				t.Annotations["argocd.argoproj.io/compare-options"] = "IgnoreExtraneous"
-			} else {
-				t.Annotations = map[string]string{"argocd.argoproj.io/compare-options": "IgnoreExtraneous"}
+		if rollout {
+			replicaSets, err := r.getFilteredReplicaSets(ctx, t.Namespace, labelSelector)
+
+			if err != nil {
+				r.Logger.Error(err, "unable to get filtered replicasets")
+				return err
 			}
 
-			err = r.Update(ctx, t)
-			if err != nil {
-				r.Logger.Error(err, "unable to update configmap")
-				return err
+			rsAnnotation := replicaSets.Items[0].Annotations["rollout.argoproj.io/ephemeral-metadata"]
+			// if replicaSet Annotation is not nil or empty, and having the following value: '{"labels":{"role":"preview"}}' or '{"labels":{"role":"canary"}}' it should add IgnoreExtraneous annotation
+			if rsAnnotation != "" && (rsAnnotation == `{"labels":{"role":"active"}}` || rsAnnotation == `{"labels":{"role":"stable"}}`) {
+				r.Logger.Info(fmt.Sprintf("adding IgnoreExtraneous annotation to %s secret, reason: replica has rollout.argoproj.io/ephemeral-metadata annotation", t.Name))
+				if t.Annotations != nil {
+					t.Annotations["argocd.argoproj.io/compare-options"] = "IgnoreExtraneous"
+				} else {
+					t.Annotations = map[string]string{"argocd.argoproj.io/compare-options": "IgnoreExtraneous"}
+				}
+
+				err = r.Update(ctx, t)
+				if err != nil {
+					r.Logger.Error(err, "unable to update configmap")
+					return err
+				}
 			}
 		}
 
@@ -389,5 +418,42 @@ func (r *ArgoRolloutConfigKeeperCommon) UpdateCondition(ctx context.Context, T i
 		return r.Status().Update(ctx, t)
 	default:
 		return fmt.Errorf("unsupported type: %T", T)
+	}
+}
+
+func (r *ArgoRolloutConfigKeeperCommon) checkIfRolloutActive(ctx context.Context, namespace string, labelSelector map[string]string) (bool, error) {
+	rollouts := &v1alpha1.RolloutList{}
+	blueGreenEmptyStatus := v1alpha1.BlueGreenStatus{}
+	canaryEmptyStatus := v1alpha1.CanaryStatus{}
+
+	if err := r.List(ctx, rollouts, client.InNamespace(namespace), client.MatchingLabels(labelSelector)); err != nil {
+		r.Logger.Error(err, fmt.Sprintf("unable to list rollouts in %s namespace", namespace))
+		return false, client.IgnoreNotFound(err)
+	}
+
+	if len(rollouts.Items) == 0 {
+		return false, nil
+	}
+
+	rollout := rollouts.Items[0]
+
+	if rollout.Status.BlueGreen != blueGreenEmptyStatus {
+		if rollout.Status.BlueGreen.ActiveSelector != "" && rollout.Status.BlueGreen.ActiveSelector != rollout.Status.BlueGreen.PreviewSelector {
+			r.Logger.Info("blue-green rollout is active")
+			return true, nil
+		} else {
+			return false, nil
+		}
+	} else if rollout.Status.Canary != canaryEmptyStatus {
+		if rollout.Status.Canary.CurrentExperiment != "" ||
+			rollout.Status.Canary.CurrentStepAnalysisRunStatus != nil ||
+			rollout.Status.Canary.CurrentBackgroundAnalysisRunStatus != nil {
+			r.Logger.Info("canary rollout is active")
+			return true, nil
+		} else {
+			return false, nil
+		}
+	} else {
+		return false, nil
 	}
 }

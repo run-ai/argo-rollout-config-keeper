@@ -19,32 +19,35 @@ package controller
 import (
 	"context"
 	"fmt"
-	"time"
-
+	"github.com/argoproj/argo-rollouts/pkg/apis/rollouts/v1alpha1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	keeperv1alpha1 "github.com/run-ai/argo-rollout-config-keeper/api/v1alpha1"
+	"github.com/run-ai/argo-rollout-config-keeper/internal/tools"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	sigclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var (
-	ctx                   = context.Background()
-	name                  = "argo-rollout-config-keeper"
-	namespace             = "default"
-	configMapNamespace    = "test-configmap"
-	secretNamespace       = "test-secret"
-	chartName             = "testing-chart"
-	appVersion            = "1.11.0-staging1"
-	appPreviewVersion     = "1.11.0-staging2"
-	applicationName       = "test-application"
-	finalizerName         = "argorolloutconfigkeeper.test"
-	partOf                = "app-testing"
-	finalizerNameFullName = fmt.Sprintf("%s/%s", finalizerName, applicationName)
+	ctx                      = context.Background()
+	name                     = "argo-rollout-config-keeper"
+	namespace                = "default"
+	configMapNamespace       = "test-configmap"
+	secretNamespace          = "test-secret"
+	chartName                = "testing-chart"
+	appVersion               = "1.24"
+	appPreviewVersion        = "1.25"
+	applicationName          = "test-application"
+	finalizerName            = "argorolloutconfigkeeper.test"
+	partOf                   = "app-testing"
+	blueGreenPrefix          = "blue-green"
+	blueGreenConfigMapPrefix = fmt.Sprintf("%s-configmap", blueGreenPrefix)
+	blueGreenSecretPrefix    = fmt.Sprintf("%s-secret", blueGreenPrefix)
 )
 
 var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
@@ -54,10 +57,16 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 	}
 	argoRolloutConfigKeeper := &keeperv1alpha1.ArgoRolloutConfigKeeper{}
 
-	Context("Configmap Tests", func() {
+	Context("Blue-Green ConfigMap Tests", func() {
 		BeforeAll(func() {
-			manageConfigmaps(ctx, namespace, "create")
-			manageReplicas(ctx, namespace, "create", 1)
+			// Install the CRDs
+			manageRollouts(ctx, namespace, blueGreenPrefix, "create", blueGreenConfigMapPrefix)
+			labelSelector := map[string]string{
+				"app.kubernetes.io/name":    fmt.Sprintf("%s-%s", applicationName, blueGreenConfigMapPrefix),
+				"app.kubernetes.io/version": appVersion,
+			}
+			waitForReplicaSetToBeReady(ctx, namespace, labelSelector)
+			manageConfigmaps(ctx, namespace, "create", blueGreenConfigMapPrefix)
 			By("creating the custom resource for the Kind ArgoRolloutConfigKeeper")
 			err := k8sClient.Get(ctx, typeNamespacedName, argoRolloutConfigKeeper)
 			if err != nil && errors.IsNotFound(err) {
@@ -67,7 +76,6 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 						Namespace: namespace,
 					},
 					Spec: keeperv1alpha1.ArgoRolloutConfigKeeperSpec{
-						// Add spec details here
 						FinalizerName: finalizerName,
 						ConfigLabelSelector: map[string]string{
 							"app.kubernetes.io/part-of": partOf,
@@ -79,16 +87,17 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			manageConfigmaps(ctx, namespace, "delete")
-			manageReplicas(ctx, namespace, "delete", 0)
+			manageConfigmaps(ctx, namespace, "delete", blueGreenConfigMapPrefix)
+			manageRollouts(ctx, namespace, blueGreenPrefix, "delete", blueGreenConfigMapPrefix)
 			resource := &keeperv1alpha1.ArgoRolloutConfigKeeper{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 			By("Cleanup the specific resource instance ArgoRolloutConfigKeeper")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
+
+		It("should successfully reconcile the argo-rollout-config-keeper resource", func() {
+			By("Reconciling the created argo-rollout-config-keeper resource")
 			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
@@ -99,7 +108,13 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 		})
-		It("ConfigMapPreviews should have IgnoreExtraneous annotation", func() {
+		It("Blue-Green ConfigMap should have the correct annotations", func() {
+			createNewRolloutRevision(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, blueGreenConfigMapPrefix), blueGreenConfigMapPrefix)
+			labelSelector := map[string]string{
+				"app.kubernetes.io/name":    fmt.Sprintf("%s-%s", applicationName, blueGreenConfigMapPrefix),
+				"app.kubernetes.io/version": appPreviewVersion,
+			}
+			waitForReplicaSetToBeReady(ctx, namespace, labelSelector)
 			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
@@ -109,11 +124,20 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 				NamespacedName: typeNamespacedName,
 			})
 
-			configMapPreview, err := getConfigmap(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(configMapPreview.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
+
+			configMap, err := getConfigmap(ctx, namespace, fmt.Sprintf("%s-%s-%s-%s", chartName, applicationName, appVersion, blueGreenConfigMapPrefix))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(configMap.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
 		})
-		It("ConfigMap should have the finalizer", func() {
+		It("Blue-Green ConfigMap should not have the finalizer", func() {
+			promoteRollout(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, blueGreenConfigMapPrefix))
+
+			checkOldReplicaSet(ctx, namespace, map[string]string{
+				"app.kubernetes.io/name":    fmt.Sprintf("%s-%s", applicationName, blueGreenConfigMapPrefix),
+				"app.kubernetes.io/version": appVersion,
+			})
+
 			By("Reconciling the created resource")
 			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
 				Client: k8sClient,
@@ -124,39 +148,22 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			configMap, err := getConfigmap(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
-			Expect(err).NotTo(HaveOccurred())
-			Expect(configMap.Finalizers).To(ContainElement(finalizerNameFullName))
-		})
-		It("Should remove the finalizer from the configmap", func() {
-			By("Updating the replicaset to 0")
-			manageReplicas(ctx, namespace, "update", 0)
-			By("Reconciling the created resource")
-			var (
-				err       error
-				configMap *corev1.ConfigMap
-			)
-			configMap, err = getConfigmap(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
-
-			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			configMap, err = getConfigmap(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			configMap, err := getConfigmap(ctx, namespace, fmt.Sprintf("%s-%s-%s-%s", chartName, applicationName, appVersion, blueGreenConfigMapPrefix))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configMap.Finalizers).To(BeNil())
 		})
 	})
 
-	Context("Secret Tests", func() {
+	Context("Blue-Green Secret Tests", func() {
 		BeforeAll(func() {
-			manageSecrets(ctx, namespace, "create")
-			manageReplicas(ctx, namespace, "create", 1)
+			// Install the CRDs
+			manageRollouts(ctx, namespace, blueGreenPrefix, "create", blueGreenSecretPrefix)
+			labelSelector := map[string]string{
+				"app.kubernetes.io/name":    fmt.Sprintf("%s-%s", applicationName, blueGreenSecretPrefix),
+				"app.kubernetes.io/version": appVersion,
+			}
+			waitForReplicaSetToBeReady(ctx, namespace, labelSelector)
+			manageSecrets(ctx, namespace, "create", blueGreenSecretPrefix)
 			By("creating the custom resource for the Kind ArgoRolloutConfigKeeper")
 			err := k8sClient.Get(ctx, typeNamespacedName, argoRolloutConfigKeeper)
 			if err != nil && errors.IsNotFound(err) {
@@ -166,8 +173,10 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 						Namespace: namespace,
 					},
 					Spec: keeperv1alpha1.ArgoRolloutConfigKeeperSpec{
-						// Add spec details here
 						FinalizerName: finalizerName,
+						ConfigLabelSelector: map[string]string{
+							"app.kubernetes.io/part-of": partOf,
+						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
@@ -175,16 +184,17 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			manageSecrets(ctx, namespace, "delete")
-			manageReplicas(ctx, namespace, "delete", 0)
+			manageSecrets(ctx, namespace, "delete", blueGreenSecretPrefix)
+			manageRollouts(ctx, namespace, blueGreenPrefix, "delete", blueGreenSecretPrefix)
 			resource := &keeperv1alpha1.ArgoRolloutConfigKeeper{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 			By("Cleanup the specific resource instance ArgoRolloutConfigKeeper")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
+
+		It("should successfully reconcile the argo-rollout-config-keeper resource", func() {
+			By("Reconciling the created argo-rollout-config-keeper resource")
 			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
@@ -195,12 +205,36 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 		})
-		It("SecretPreviews should have IgnoreExtraneous annotation", func() {
-			secretPreview, err := getSecret(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+		It("Blue-Green Secret should have the correct annotations", func() {
+			createNewRolloutRevision(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, blueGreenSecretPrefix), blueGreenSecretPrefix)
+			labelSelector := map[string]string{
+				"app.kubernetes.io/name":    fmt.Sprintf("%s-%s", applicationName, blueGreenSecretPrefix),
+				"app.kubernetes.io/version": appPreviewVersion,
+			}
+			waitForReplicaSetToBeReady(ctx, namespace, labelSelector)
+			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+
 			Expect(err).NotTo(HaveOccurred())
-			Expect(secretPreview.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
+
+			secret, err := getSecret(ctx, namespace, fmt.Sprintf("%s-%s-%s-%s", chartName, applicationName, appVersion, blueGreenSecretPrefix))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(secret.Annotations).To(HaveKeyWithValue("argocd.argoproj.io/compare-options", "IgnoreExtraneous"))
 		})
-		It("Secret should have the finalizer", func() {
+		It("Blue-Green Secret should not have the finalizer", func() {
+			promoteRollout(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, blueGreenSecretPrefix))
+
+			checkOldReplicaSet(ctx, namespace, map[string]string{
+				"app.kubernetes.io/name":    fmt.Sprintf("%s-%s", applicationName, blueGreenSecretPrefix),
+				"app.kubernetes.io/version": appVersion,
+			})
+
 			By("Reconciling the created resource")
 			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
 				Client: k8sClient,
@@ -211,31 +245,7 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			secret, err := getSecret(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
-			Expect(err).NotTo(HaveOccurred())
-			Expect(secret.Finalizers).To(ContainElement(finalizerNameFullName))
-		})
-		It("Should remove the finalizer from the secret", func() {
-			By("Updating the replicaset to 0")
-			manageReplicas(ctx, namespace, "update", 0)
-			By("Reconciling the created resource")
-			var (
-				err    error
-				secret *corev1.Secret
-			)
-
-			secret, err = getSecret(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
-
-			controllerReconciler := &ArgoRolloutConfigKeeperReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-			}
-			_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			secret, err = getSecret(ctx, namespace, fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion))
+			secret, err := getSecret(ctx, namespace, fmt.Sprintf("%s-%s-%s-%s", chartName, applicationName, appVersion, blueGreenSecretPrefix))
 			Expect(err).NotTo(HaveOccurred())
 			Expect(secret.Finalizers).To(BeNil())
 		})
@@ -243,11 +253,10 @@ var _ = Describe("ArgoRolloutConfigKeeper Controller", Ordered, func() {
 
 })
 
-func manageConfigmaps(ctx context.Context, namespace, operation string) {
-
+func manageConfigmaps(ctx context.Context, namespace, operation, prefix string) {
 	configmap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion),
+			Name:      fmt.Sprintf("%s-%s-%s-%s", chartName, applicationName, appVersion, prefix),
 			Namespace: namespace,
 			Labels: map[string]string{
 				"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
@@ -256,7 +265,7 @@ func manageConfigmaps(ctx context.Context, namespace, operation string) {
 				"app.kubernetes.io/version":    appVersion,
 				"helm.sh/chart":                fmt.Sprintf("%s-%s", chartName, appVersion),
 			},
-			Finalizers: []string{finalizerNameFullName},
+			Finalizers: []string{fmt.Sprintf("%s/%s-%s", finalizerName, applicationName, prefix)},
 		},
 	}
 
@@ -283,10 +292,10 @@ func getConfigmap(ctx context.Context, namespace, name string) (*corev1.ConfigMa
 	return configmap, err
 }
 
-func manageSecrets(ctx context.Context, namespace, operation string) {
+func manageSecrets(ctx context.Context, namespace, operation, prefix string) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s-%s", chartName, applicationName, appVersion),
+			Name:      fmt.Sprintf("%s-%s-%s-%s", chartName, applicationName, appVersion, prefix),
 			Namespace: namespace,
 			Labels: map[string]string{
 				"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
@@ -295,7 +304,7 @@ func manageSecrets(ctx context.Context, namespace, operation string) {
 				"app.kubernetes.io/version":    appVersion,
 				"helm.sh/chart":                fmt.Sprintf("%s-%s", chartName, appVersion),
 			},
-			Finalizers: []string{finalizerNameFullName},
+			Finalizers: []string{fmt.Sprintf("%s/%s-%s", finalizerName, applicationName, prefix)},
 		},
 	}
 
@@ -323,129 +332,6 @@ func getSecret(ctx context.Context, namespace, name string) (*corev1.Secret, err
 	return secret, err
 }
 
-func manageReplicas(ctx context.Context, namespace, operation string, replicaNumber int) {
-	replicaNum := int32(replicaNumber)
-	replica := &appsv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s-%s", chartName, applicationName, "db4d5cb8"),
-			Namespace: namespace,
-			Annotations: map[string]string{
-				"rollout.argoproj.io/ephemeral-metadata": `{"labels":{"role":"preview"}}`,
-			},
-			Labels: map[string]string{
-				"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
-				"app.kubernetes.io/managed-by": "Helm",
-				"app.kubernetes.io/name":       applicationName,
-				"app.kubernetes.io/part-of":    partOf,
-				"app.kubernetes.io/version":    appVersion,
-				"helm.sh/chart":                fmt.Sprintf("%s-%s", chartName, appVersion),
-				"rollouts-pod-template-hash":   "db4d5cb8",
-			},
-		},
-		Spec: appsv1.ReplicaSetSpec{
-			Replicas: &replicaNum,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
-					"app.kubernetes.io/managed-by": "Helm",
-					"app.kubernetes.io/name":       applicationName,
-					"app.kubernetes.io/part-of":    partOf,
-					"rollouts-pod-template-hash":   "db4d5cb8",
-				},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
-						"app.kubernetes.io/managed-by": "Helm",
-						"app.kubernetes.io/name":       applicationName,
-						"app.kubernetes.io/part-of":    partOf,
-						"rollouts-pod-template-hash":   "db4d5cb8",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "runai",
-							Image: "alpine:3.14",
-						},
-					},
-				},
-			},
-		},
-	}
-
-	replicaPreview := &appsv1.ReplicaSet{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s-%s", chartName, applicationName, "ab4d5c47"),
-			Namespace: namespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
-				"app.kubernetes.io/managed-by": "Helm",
-				"app.kubernetes.io/name":       applicationName,
-				"app.kubernetes.io/part-of":    partOf,
-				"app.kubernetes.io/version":    appPreviewVersion,
-				"helm.sh/chart":                fmt.Sprintf("%s-%s", chartName, appPreviewVersion),
-				"rollouts-pod-template-hash":   "ab4d5c47",
-			},
-		},
-		Spec: appsv1.ReplicaSetSpec{
-			Replicas: &replicaNum,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{
-					"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
-					"app.kubernetes.io/managed-by": "Helm",
-					"app.kubernetes.io/name":       applicationName,
-					"app.kubernetes.io/part-of":    partOf,
-					"rollouts-pod-template-hash":   "ab4d5c47",
-				},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
-						"app.kubernetes.io/managed-by": "Helm",
-						"app.kubernetes.io/name":       applicationName,
-						"app.kubernetes.io/part-of":    partOf,
-						"rollouts-pod-template-hash":   "ab4d5c47",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "runai",
-							Image: "alpine:3.14",
-						},
-					},
-				},
-			},
-		},
-	}
-
-	switch operation {
-	case "create":
-		// create replica
-		Expect(k8sClient.Create(ctx, replica)).To(Succeed())
-		Expect(k8sClient.Create(ctx, replicaPreview)).To(Succeed())
-		time.Sleep(2 * time.Second)
-		break
-	case "delete":
-		// delete replica
-		Expect(k8sClient.Delete(ctx, replica)).To(Succeed())
-		Expect(k8sClient.Delete(ctx, replicaPreview)).To(Succeed())
-		time.Sleep(2 * time.Second)
-		break
-	case "update":
-		// update replica
-		Expect(k8sClient.Update(ctx, replica)).To(Succeed())
-		Expect(k8sClient.Update(ctx, replicaPreview)).To(Succeed())
-		time.Sleep(2 * time.Second)
-		break
-	default:
-		panic("Invalid operation")
-	}
-}
-
 func manageNamespace(ctx context.Context, name, operation string) {
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -465,4 +351,217 @@ func manageNamespace(ctx context.Context, name, operation string) {
 	default:
 		panic("Invalid operation")
 	}
+}
+
+func manageRollouts(ctx context.Context, namespace, rolloutType, operation, prefix string) {
+	activeServiceName := fmt.Sprintf("active-service-%s", prefix)
+	previewServiceName := fmt.Sprintf("preview-service-%s", prefix)
+	appName := fmt.Sprintf("%s-%s", applicationName, prefix)
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      activeServiceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
+				"app.kubernetes.io/managed-by": "Helm",
+				"app.kubernetes.io/name":       appName,
+				"app.kubernetes.io/part-of":    partOf,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
+				"app.kubernetes.io/managed-by": "Helm",
+				"app.kubernetes.io/name":       appName,
+				"app.kubernetes.io/part-of":    partOf,
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Port: 80,
+				},
+			},
+		},
+	}
+
+	servicePreview := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      previewServiceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
+				"app.kubernetes.io/managed-by": "Helm",
+				"app.kubernetes.io/name":       appName,
+				"app.kubernetes.io/part-of":    partOf,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
+				"app.kubernetes.io/managed-by": "Helm",
+				"app.kubernetes.io/name":       appName,
+				"app.kubernetes.io/part-of":    partOf,
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Port: 80,
+				},
+			},
+		},
+	}
+
+	rollout := &v1alpha1.Rollout{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-%s-%s", chartName, applicationName, prefix),
+			Namespace: namespace,
+			Labels: map[string]string{
+				"app.kubernetes.io/name": appName,
+			},
+		},
+		Spec: v1alpha1.RolloutSpec{
+			Replicas: tools.Int32Ptr(1),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
+					"app.kubernetes.io/managed-by": "Helm",
+					"app.kubernetes.io/name":       appName,
+					"app.kubernetes.io/part-of":    partOf,
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
+						"app.kubernetes.io/managed-by": "Helm",
+						"app.kubernetes.io/name":       appName,
+						"app.kubernetes.io/part-of":    partOf,
+						"app.kubernetes.io/version":    appVersion,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "nginx",
+							Image: fmt.Sprintf("nginx:%s", appVersion),
+							Ports: []corev1.ContainerPort{
+								{
+									ContainerPort: 80,
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	if rolloutType == blueGreenPrefix {
+		rollout.Spec.Strategy = v1alpha1.RolloutStrategy{
+			BlueGreen: &v1alpha1.BlueGreenStrategy{
+				AutoPromotionEnabled: tools.BoolPtr(false),
+				ActiveService:        activeServiceName,
+				ActiveMetadata: &v1alpha1.PodTemplateMetadata{
+					Labels: map[string]string{
+						"role": "active",
+					},
+				},
+				PreviewService: previewServiceName,
+				PreviewMetadata: &v1alpha1.PodTemplateMetadata{
+					Labels: map[string]string{
+						"role": "preview",
+					},
+				},
+			},
+		}
+	}
+
+	switch operation {
+	case "create":
+		// create service
+		Expect(k8sClient.Create(ctx, service)).To(Succeed())
+		Expect(k8sClient.Create(ctx, servicePreview)).To(Succeed())
+		// create rollout
+		Expect(k8sClient.Create(ctx, rollout)).To(Succeed())
+		break
+	case "delete":
+		// delete service
+		Expect(k8sClient.Delete(ctx, service)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, servicePreview)).To(Succeed())
+		// delete rollout
+		Expect(k8sClient.Delete(ctx, rollout)).To(Succeed())
+		break
+	default:
+		panic("Invalid operation")
+	}
+}
+
+func createNewRolloutRevision(ctx context.Context, namespace, rolloutName, prefix string) {
+	//	need to create a new rollout revision
+	rollout := &v1alpha1.Rollout{}
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: rolloutName, Namespace: namespace}, rollout)).To(Succeed())
+
+	rollout.Spec.Template = corev1.PodTemplateSpec{
+		ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{
+				"app.kubernetes.io/instance":   fmt.Sprintf("%s-%s", chartName, applicationName),
+				"app.kubernetes.io/managed-by": "Helm",
+				"app.kubernetes.io/name":       fmt.Sprintf("%s-%s", applicationName, prefix),
+				"app.kubernetes.io/part-of":    partOf,
+				"app.kubernetes.io/version":    appPreviewVersion,
+			},
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "nginx",
+					Image: fmt.Sprintf("nginx:%s", appPreviewVersion),
+					Ports: []corev1.ContainerPort{
+						{
+							ContainerPort: 80,
+						},
+					},
+				},
+			},
+		},
+	}
+	Expect(k8sClient.Update(ctx, rollout)).To(Succeed())
+}
+
+func promoteRollout(ctx context.Context, namespace, rolloutName string) {
+	rollout := &v1alpha1.Rollout{}
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: rolloutName, Namespace: namespace}, rollout)).To(Succeed())
+
+	rollout.Status.PromoteFull = true
+	Expect(k8sClient.Status().Update(ctx, rollout)).To(Succeed())
+
+	Eventually(func() bool {
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: rolloutName, Namespace: namespace}, rollout)).To(Succeed())
+		return rollout.Status.Phase == "Healthy"
+	}, "10s", "1s").Should(BeTrue())
+}
+
+func waitForReplicaSetToBeReady(ctx context.Context, namespace string, labelSelector map[string]string) {
+	replicaSets := &appsv1.ReplicaSetList{}
+
+	Eventually(func() bool {
+		Expect(k8sClient.List(ctx, replicaSets, sigclient.InNamespace(namespace), sigclient.MatchingLabels(labelSelector))).To(Succeed())
+		if replicaSets.Items == nil {
+			return false
+		}
+		replicaSet := replicaSets.Items[0]
+		return replicaSet.Status.ReadyReplicas == *replicaSet.Spec.Replicas
+	}, "50s", "40s", "30s", "20s", "10s", "1s").Should(BeTrue())
+}
+
+// need to check the old replica set desired replicas is 0
+func checkOldReplicaSet(ctx context.Context, namespace string, labelSelector map[string]string) {
+	replicaSets := &appsv1.ReplicaSetList{}
+
+	Eventually(func() bool {
+		Expect(k8sClient.List(ctx, replicaSets, sigclient.InNamespace(namespace), sigclient.MatchingLabels(labelSelector))).To(Succeed())
+		if replicaSets.Items == nil {
+			return false
+		}
+		replicaSet := replicaSets.Items[0]
+		return replicaSet.Status.ReadyReplicas == 0
+	}, "50s", "40s", "30s", "20s", "10s", "1s").Should(BeTrue())
 }
